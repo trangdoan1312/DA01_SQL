@@ -104,3 +104,55 @@ SELECT
   revenue
 FROM RevenueByDay
 ORDER BY dates,product_categories;
+
+
+--Q6 (P2)
+WITH MonthlySummary AS (
+   SELECT
+       EXTRACT(YEAR FROM orders.created_at) AS Year,
+       EXTRACT(MONTH FROM orders.created_at) AS Month,
+       products.category AS Product_category,
+       SUM(order_items.sale_price) AS TPV,
+       COUNT(DISTINCT orders.order_id) AS TPO,
+       SUM(products.cost) AS Total_cost,
+       SUM(order_items.sale_price - products.cost) AS Total_profit
+   FROM bigquery-public-data.thelook_ecommerce.orders
+   JOIN bigquery-public-data.thelook_ecommerce.order_items ON orders.order_id = order_items.order_id
+   JOIN bigquery-public-data.thelook_ecommerce.products ON order_items.product_id = products.id
+   GROUP BY
+       EXTRACT(YEAR FROM orders.created_at),
+       EXTRACT(MONTH FROM orders.created_at),
+       products.category
+),
+PreviousMonthData AS (
+   SELECT
+       EXTRACT(YEAR FROM orders.created_at) AS Prev_Year,
+       EXTRACT(MONTH FROM orders.created_at) AS Prev_Month,
+       products.category AS Prev_Product_category,
+       SUM(order_items.sale_price) AS Prev_TPV,
+       COUNT(DISTINCT orders.order_id) AS Prev_TPO
+   FROM bigquery-public-data.thelook_ecommerce.orders
+   JOIN bigquery-public-data.thelook_ecommerce.order_items ON orders.order_id = order_items.order_id
+   JOIN bigquery-public-data.thelook_ecommerce.products ON order_items.product_id = products.id
+   GROUP BY
+       EXTRACT(YEAR FROM orders.created_at),
+       EXTRACT(MONTH FROM orders.created_at),
+       products.category
+)
+SELECT
+   Month,
+   Year,
+   Product_category,
+   TPV,
+   TPO,
+   ROUND(((TPV - Prev_TPV) / Prev_TPV) * 100,2) AS Revenue_growth,
+   ROUND(((TPO - Prev_TPO) / Prev_TPO) * 100,2) AS Order_growth,
+   Total_cost,
+   Total_profit,
+   (Total_profit / NULLIF(Total_cost, 0)) AS Profit_to_cost_ratio
+FROM MonthlySummary
+JOIN PreviousMonthData ON Month = Prev_Month + 1 AND Year = Prev_Year AND Product_category = Prev_Product_category
+ORDER BY
+   Year,
+   Month,
+   Product_category;
