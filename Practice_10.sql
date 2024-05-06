@@ -1,14 +1,3 @@
-User
-Bảng Orders : ghi lại tất cả các đơn hàng mà khách hàng đã đặt (co cac column: id, order_id, user_id, product_id, inventory_item_id, status)
-Bảng Order_items : ghi lại danh sách các mặt hàng đã mua trong mỗi order ID (co cac column: order_id, user_id, status, gender, created_at, returned_at, shipped_at, delivered_at, num_of_item)
-Bảng Products : ghi lại chi tiết các sản phẩm được bán trên The Look, bao gồm price, brand, & product categories (co cac column: id, cost, category, name, brand, retail_price, department, sku, distribution_center_id)
-GIUP TOI VIET SQL COMMAND CHO TASK SAU DAY
-1. Số lượng đơn hàng và số lượng khách hàng mỗi tháng
-Thống kê tổng số lượng người mua và số lượng đơn hàng đã hoàn thành mỗi tháng ( Từ 1/2019-4/2022)
-Output: month_year ( yyyy-mm) , total_user, total_orde
-
-
-
 --Q1
 SELECT FORMAT_DATE('%Y-%m', t2.delivered_at) as month_year, 
 COUNT(DISTINCT t1.user_id) as total_user,
@@ -156,3 +145,44 @@ ORDER BY
    Year,
    Month,
    Product_category;
+
+
+--Q7 (P2)
+WITH MonthlyCohortData AS (
+    SELECT 
+        EXTRACT(YEAR FROM orders.created_at) AS Year,
+        EXTRACT(MONTH FROM orders.created_at) AS Signup_Month,
+        EXTRACT(YEAR FROM orders.created_at) * 100 + EXTRACT(MONTH FROM orders.created_at) AS Cohort,
+        order_items.user_id
+    FROM bigquery-public-data.thelook_ecommerce.orders
+    JOIN bigquery-public-data.thelook_ecommerce.order_items ON orders.order_id = order_items.order_id
+    GROUP BY Year, Signup_Month, Cohort, order_items.user_id
+),
+RetentionData AS (
+    SELECT 
+        Cohort,
+        EXTRACT(MONTH FROM CURRENT_DATE()) - Signup_Month + 1 AS Cohort_Index,
+        COUNT(DISTINCT orders.user_id) AS Cohort_Size,
+        COUNTIF(EXTRACT(MONTH FROM orders.created_at) = Signup_Month) AS Retention_1,
+        COUNTIF(EXTRACT(MONTH FROM orders.created_at) = Signup_Month + 1) AS Retention_2,
+        COUNTIF(EXTRACT(MONTH FROM orders.created_at) = Signup_Month + 2) AS Retention_3,
+        COUNTIF(EXTRACT(MONTH FROM orders.created_at) = Signup_Month + 3) AS Retention_4
+    FROM MonthlyCohortData
+    LEFT JOIN bigquery-public-data.thelook_ecommerce.orders ON MonthlyCohortData.user_id = orders.user_id
+    GROUP BY Cohort, Signup_Month
+)
+SELECT 
+    Cohort,
+    Cohort_Index,
+    Cohort_Size,
+    Retention_1,
+    Retention_2,
+    Retention_3,
+    Retention_4,
+    ROUND(Retention_1 / NULLIF(Cohort_Size, 0) * 100, 2) AS Pct_Retention_1,
+    ROUND(Retention_2 / NULLIF(Cohort_Size, 0) * 100, 2) AS Pct_Retention_2,
+    ROUND(Retention_3 / NULLIF(Cohort_Size, 0) * 100, 2) AS Pct_Retention_3,
+    ROUND(Retention_4 / NULLIF(Cohort_Size, 0) * 100, 2) AS Pct_Retention_4
+FROM RetentionData
+ORDER BY Cohort, Cohort_Index;
+
